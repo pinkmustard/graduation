@@ -7,6 +7,7 @@ from torchvision import transforms
 import torchvision
 from PIL import Image
 from flask import Flask, request
+import requests
 
 class MyNet(nn.Module):
     def __init__(self):
@@ -78,8 +79,28 @@ def upload_file():
             with torch.no_grad():
                 outputs = model(img)
                 _, predicted = torch.max(outputs, 1)
+            
+            url = 'http://52.79.237.164:3000/user/skin/classification'
+            
+            files = {'photoFile': open(f'img/{filename}', 'rb')}  # 파일 이름에 맞게 수정
+            data = {
+                'userId': 'park123123',
+                'aiType': "트러블 유형 분석",
+                'troubleType': f'{predicted.item()}'
+            }
+
+            response = requests.post(url, files=files, data=data)
+            # 응답 데이터를 JSON 형식으로 파싱
+            json_data = response.json()
+
+            # 각 필드의 값을 출력
+            record_id = json_data['recordId']
+            success = json_data['success']
+            message = json_data['message']
+            property_value = json_data['property']
+
             # return jsonify({"acne_level": predicted.item()})
-            return f'acne_level: {predicted.item()}'
+            return f'Record ID: {record_id}, Success: {success}, Message: {message}, Property: {property_value}'
     return '''
     <!doctype html>
     <title>Upload new File</title>
