@@ -37,7 +37,7 @@ app.secret_key = os.environ.get('SECRET_KEY', 'you-should-change-this')
 # Ensure upload folder exists
 os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)
 
-@app.route('/test', methods=['POST'])
+@app.route('/classification_pred', methods=['POST'])
 def upload_file():
     if 'file' not in request.files or 'userId' not in request.form:
         return jsonify({'error': 'No file part or userId not provided'}), 400
@@ -73,7 +73,7 @@ def process_image(filename, userId):
         _, predicted = torch.max(outputs, 1)
 
     try:
-        url = 'http://52.79.237.164:3000/user/skin/classification'
+        url = 'http://52.79.237.164:3000/user/skin/classification/save'
         files = {'photoFile': open(os.path.join(app.config['UPLOAD_FOLDER'], filename), 'rb')}
         data = {
             'userId': userId,
