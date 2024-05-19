@@ -1,12 +1,10 @@
 from flask import Flask
-from flask_cors import CORS
 from acne_classification.classification_pred import predict_classification
 from acne_classification.classification_train import train_classification
 from acne_detection.detection_pred import predict_detection
 from acne_detection.detection_train import train_detection
 
 app = Flask(__name__)
-CORS(app)
 
 @app.route('/classification_pred', methods=['POST'])
 def classification_prediction():

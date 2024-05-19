@@ -17,6 +17,9 @@ from tqdm import tqdm
 import numpy as np
 from torch.optim.lr_scheduler import CosineAnnealingWarmRestarts
 from flask import Flask, request, jsonify
+import base64
+import matplotlib.pyplot as plt
+from itertools import cycle
 
 # define a data class
 class ClassificationDataset:
@@ -405,4 +408,32 @@ def train_classification():
         roc_auc[i] = auc(fpr[i], tpr[i])
 
     average_auc = np.mean([roc_auc[i] for i in range(num_classes)])
-    return jsonify({'f1Score': f1, 'f1ScoreM': f1_micro, 'f1ScoreW':f1_weighted, 'Auc': average_auc})
+    
+    plt.figure(figsize=(8, 6))
+    lw = 2
+    colors = cycle(['aqua', 'darkorange', 'cornflowerblue', 'green'])  # Adjust color cycle according to the number of classes
+    for i, color in zip(range(num_classes), colors):
+        plt.plot(fpr[i], tpr[i], color=color, lw=lw,
+                label='ROC curve of class {0} (area = {1:0.2f})'
+                ''.format(i, roc_auc[i]))
+
+    plt.plot([0, 1], [0, 1], 'k--', lw=lw)
+    plt.xlim([0.0, 1.0])
+    plt.ylim([0.0, 1.05])
+    plt.xlabel('False Positive Rate')
+    plt.ylabel('True Positive Rate')
+    plt.title('Receiver Operating Characteristic (ROC) Curve')
+    plt.legend(loc="lower right")
+    plt.savefig('/home/t24117/last/acne_classification/roc_graph.jpeg')
+    plt.close()
+    
+    # 이미지 파일을 열고 base64로 인코딩
+    with open('/home/t24117/last/acne_classification/roc_graph.jpeg', 'rb') as image_file:
+        encoded_string = base64.b64encode(image_file.read())
+
+    # base64 인코딩된 데이터를 문자열로 변환
+    encoded_string = encoded_string.decode('utf-8')
+    # 삭제
+    os.remove('/home/t24117/last/acne_classification/roc_graph.jpeg')
+
+    return jsonify({'f1Score': f1, 'f1ScoreM': f1_micro, 'f1ScoreW':f1_weighted, 'Auc': average_auc, 'photo': encoded_string})

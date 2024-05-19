@@ -5,6 +5,9 @@ from torchvision import transforms
 import torchvision
 from PIL import Image
 from flask import Flask, request, jsonify
+import requests
+import os
+import base64
 
 class MyNet(nn.Module):
     def __init__(self):
@@ -27,8 +30,15 @@ class MyNet(nn.Module):
     def forward(self, img):
         output = self.cnn(img)
         return output
-
+    
+def encode_image_to_base64(filepath):
+    with open(filepath, "rb") as image_file:
+        encoded_bytes = base64.b64encode(image_file.read())
+        encoded_string = encoded_bytes.decode('utf-8')  # bytes를 문자열로 변환
+        return encoded_string
+    
 def predict_classification():
+    file = request.files['file']
     userId = request.form['userId']
     # 디바이스 설정
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -43,17 +53,34 @@ def predict_classification():
         transforms.ToTensor(),
         transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
     ])
+    if file:
+        img_path = f'/home/t24117/last/acne_classification/img/{userId}.jpg'
+        file.save(img_path)
+        # 이미지 로드 및 전처리
+        img = Image.open(img_path)
+        img = transform(img)
+        img = img.unsqueeze(0).to(device)  # 배치 차원 추가 및 디바이스로 이동
 
-    # 이미지 로드 및 전처리
-    img = Image.open('/home/t24117/last/acne_classification/exam.jpeg')
-    img = transform(img)
-    img = img.unsqueeze(0).to(device)  # 배치 차원 추가 및 디바이스로 이동
-
-    # 예측
-    with torch.no_grad():
-        outputs = model(img)
-        _, predicted = torch.max(outputs, 1)
-
+        # 예측
+        with torch.no_grad():
+            outputs = model(img)
+            _, predicted = torch.max(outputs, 1)
+        try:
+            url = 'http://52.79.237.164:3000/user/skin/classification/save'
+            files = {'photoFile': open(img_path, 'rb')}
+            data = {
+                'userId': userId,
+                'aiType': "AI 트러블 분석",
+                'troubleType': f'{predicted.item()}'
+            }
+            response = requests.post(url, files=files, data=data)
+            json_data = response.json()
+            encoded_string = encode_image_to_base64(img_path)
+            os.remove(img_path)  # 입력 이미지 삭제
+            record_id = json_data['recordId']
+            return jsonify({'recordId': record_id,'acneLevel': predicted.item(), 'photo': encoded_string})
+        except requests.RequestException as e:
+            return jsonify({'error': str(e)}), 500
     # 예측된 레이블 출력
-
-    return jsonify({"userId": userId, "acne_level": predicted.item()})
+    else:
+        return jsonify({'message': 'No file provided'}), 400

@@ -31,12 +31,6 @@ class MyNet(nn.Module):
         output = self.cnn(img)
         return output
     
-def encode_image_to_base64(filepath):
-    with open(filepath, "rb") as image_file:
-        encoded_bytes = base64.b64encode(image_file.read())
-        encoded_string = encoded_bytes.decode('utf-8')  # bytes를 문자열로 변환
-        return encoded_string
-    
 def predict_classification():
     file = request.files['file']
     userId = request.form['userId']
@@ -75,10 +69,8 @@ def predict_classification():
             }
             response = requests.post(url, files=files, data=data)
             json_data = response.json()
-            encoded_string = encode_image_to_base64(img_path)
             os.remove(img_path)  # 입력 이미지 삭제
-            record_id = json_data['recordId']
-            return jsonify({'recordId': record_id,'acneLevel': predicted.item(), 'photo': encoded_string})
+            return jsonify(json_data)
         except requests.RequestException as e:
             return jsonify({'error': str(e)}), 500
     # 예측된 레이블 출력

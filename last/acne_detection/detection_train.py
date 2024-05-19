@@ -4,6 +4,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 import cv2
 from tqdm.notebook import tqdm
+import base64
 
 import tensorflow as tf
 from tensorflow.keras import *
@@ -106,14 +107,14 @@ def train_detection():
     # applying functions
     # 앞서 선언한 creating_files 함수를 사용해 훈련, 검증, 테스트 데이터 셋 생성
     # 이미지 경로, 클래스, 바운딩 박스 정보 로드
-    train_img_paths, train_classes, train_bboxes = creating_files('./acne_detection/data/train/images',
-                                                                './acne_detection/data/train/labels')
+    train_img_paths, train_classes, train_bboxes = creating_files('/home/t24117/last/acne_detection/data/train/images',
+                                                                '/home/t24117/last/acne_detection/data/train/labels')
 
-    valid_img_paths, valid_classes, valid_bboxes = creating_files('./acne_detection/data/valid/images',
-                                                                './acne_detection/data/valid/labels')
+    valid_img_paths, valid_classes, valid_bboxes = creating_files('/home/t24117/last/acne_detection/data/valid/images',
+                                                                '/home/t24117/last/acne_detection/data/valid/labels')
 
-    test_img_paths, test_classes, test_bboxes = creating_files('./acne_detection/data//test/images',
-                                                            './acne_detection/data//test/labels')
+    test_img_paths, test_classes, test_bboxes = creating_files('/home/t24117/last/acne_detection/data//test/images',
+                                                            '/home/t24117/last/acne_detection/data//test/labels')
 
     def img_preprocessing(img_path):
         img = tf.io.read_file(img_path) # 이미지 읽기
@@ -197,7 +198,7 @@ def train_detection():
         # 옵티마이저 및 콜백 설정: AdamW사용
         optimizer = AdamW(learning_rate=input_learning_rate, weight_decay=input_weight_decay, global_clipnorm = 10.0)
         # 모델 훈련과정에서 성능을 모니터링하고 조정하는 콜백 설정. 가중치 저장 및 학습률 조정, 조기 종료
-        my_callbacks = [ModelCheckpoint('./acne_detection/model/yolov8_acne_detection_xs.h5', monitor = 'val_loss',save_best_only = True, save_weights_only = True),
+        my_callbacks = [ModelCheckpoint('/home/t24117/last/acne_detection/model/yolov8_acne_detection_xs.h5', monitor = 'val_loss',save_best_only = True, save_weights_only = True),
                         ReduceLROnPlateau(monitor='val_loss', factor=0.01, patience=8, verbose=0, min_delta=0.001),
                         EarlyStopping(monitor='val_loss', patience=input_patience)]
 
@@ -206,5 +207,137 @@ def train_detection():
         
     # 모델 학습
     hist = YOLOV8_model.fit(train_dataset, validation_data = valid_dataset,  epochs = input_epochs, callbacks = my_callbacks)
-    ap_score = 0.82312
-    return jsonify({'apScore': ap_score})
+    
+    class_mapping = {0: 'Acne'}
+    backbone = keras_cv.models.YOLOV8Backbone.from_preset("yolo_v8_xs_backbone", include_rescaling = True)
+    YOLOV8_model = keras_cv.models.YOLOV8Detector(num_classes=len(class_mapping), bounding_box_format = "xyxy", backbone = backbone, fpn_depth = 5)
+    YOLOV8_model.load_weights('/home/t24117/last/acne_detection/model/yolov8_acne_detection_xs.h5')
+
+    # ragged_tensor를 넘파이 배열로 바꾸기
+    def ragged_to_numpy(ragged_tensor, fill_value=-1):
+        dense_tensor = ragged_tensor.to_tensor(default_value=fill_value)
+        numpy_array = dense_tensor.numpy()
+        return numpy_array
+
+    # 시각화
+    # 데이터 셋에서 한 배치만 가져와 시각화
+    def visualize_dataset(inputs):
+        inputs = next(iter(inputs.take(1))) # 하나의 배치를 가져와 해당 배치를 추출함
+        images, bounding_boxes = inputs[0], inputs[1] # 추출된 데이터에서 이미지와 바운딩 박스 정보를 불러옴
+        bounding_boxes_xy = bounding_boxes['boxes']
+        return(images, ragged_to_numpy(bounding_boxes_xy))
+    test_img, test_boxes = visualize_dataset(test_dataset)
+
+    def pred_test_dataset(model, img_path, bounding_box_format, class_mapping):
+        # 이미지를 읽고 전처리
+        img = tf.convert_to_tensor(img_path)
+        img = tf.expand_dims(img, axis=0)  # 배치 차원 추가
+
+        #모델 예측 수행
+        y_pred = model.predict(img, verbose=0)
+        return (y_pred['boxes'], y_pred['confidence'])
+    all_pred_boxes = []
+    all_pred_confidence = []
+    for i in range(16):
+        pred_boxes, pred_confidence = pred_test_dataset(YOLOV8_model, test_img[i], 'xyxy', class_mapping)
+        all_pred_boxes.append(pred_boxes)
+        all_pred_confidence.append(pred_confidence)
+    # IoU 계산 함수
+    def calculate_iou(box1, box2):
+        x1, y1, x2, y2 = box1
+        x1_p, y1_p, x2_p, y2_p = box2
+
+        # 교차 영역 계산
+        xi1 = max(x1, x1_p)
+        yi1 = max(y1, y1_p)
+        xi2 = min(x2, x2_p)
+        yi2 = min(y2, y2_p)
+
+        inter_area = max(0, xi2 - xi1) * max(0, yi2 - yi1)
+
+        # 박스 1과 박스 2의 영역 계산
+        box1_area = (x2 - x1) * (y2 - y1)
+        box2_area = (x2_p - x1_p) * (y2_p - y1_p)
+
+        # IoU 계산
+        union_area = box1_area + box2_area - inter_area
+        iou = inter_area / union_area
+
+        return iou
+
+    # 정밀도와 재현율 계산 함수
+    def calculate_precision_recall(ground_truth, predictions, iou_threshold=0.5):
+        tp = 0
+        fp = 0
+        fn = 0
+
+        for gt_box in ground_truth:
+            if np.all(gt_box == -1):
+                continue
+            matched = False
+            for pred_box in predictions[0]:
+                if np.all(pred_box == -1):
+                    continue
+                iou = calculate_iou(gt_box, pred_box)
+                if iou >= iou_threshold:
+                    tp += 1
+                    matched = True
+                    break
+            if not matched:
+                fn += 1
+
+        for pred_box in predictions[0]:
+            if np.all(pred_box == -1):
+                continue
+            matched = False
+            for gt_box in ground_truth:
+                if np.all(gt_box == -1):
+                    continue
+                iou = calculate_iou(gt_box, pred_box)
+                if iou >= iou_threshold:
+                    matched = True
+                    break
+            if not matched:
+                fp += 1
+
+        precision = tp / (tp + fp) if (tp + fp) > 0 else 0
+        recall = tp / (tp + fn) if (tp + fn) > 0 else 0
+
+        return precision, recall
+    all_precision = []
+    all_recall = []
+    # 정밀도와 재현율 계산
+    for i in range(15):
+        precision, recall = calculate_precision_recall(test_boxes[i], all_pred_boxes[i])
+        all_precision.append(precision)
+        all_recall.append(recall)
+    
+    # 그래프 작성    
+    values = [np.mean(all_precision), np.mean(all_recall)]
+    labels = ['Precision', 'Recall']
+
+    # 막대 그래프 생성
+    plt.bar(labels, values, color=['deepskyblue', 'lightgreen'])
+
+    # 타이틀과 축 레이블 추가
+    plt.title('Bar Chart of average Precision and Recall for the Test-Set')
+    plt.xlabel('Values')
+    plt.ylabel('Frequency')
+    plt.ylim(0, 1)
+
+    # 저장
+    plt.savefig('/home/t24117/last/acne_detection/bar_graph.jpeg')
+
+    # 화면에 그래프를 표시하지 않음
+    plt.close()
+
+
+    # 이미지 파일을 열고 base64로 인코딩
+    with open('/home/t24117/last/acne_detection/bar_graph.jpeg', 'rb') as image_file:
+        encoded_string = base64.b64encode(image_file.read())
+
+    # base64 인코딩된 데이터를 문자열로 변환
+    encoded_string = encoded_string.decode('utf-8')
+    # 삭제
+    os.remove('/home/t24117/last/acne_detection/bar_graph.jpeg')
+    return jsonify({'avgPrecision': np.mean(all_precision), 'avgRecall': np.mean(all_recall), 'photo': encoded_string})

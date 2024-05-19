@@ -274,14 +274,14 @@ def train_classification():
     input_epochs = data.get('Epochs', None)
     input_patience = data.get('Patience', None)
     
-    train_files = ['data/NNEW_trainval_0.txt','data/NNEW_trainval_1.txt',
-            'data/NNEW_trainval_2.txt','data/NNEW_trainval_3.txt',
-            'data/NNEW_trainval_4.txt']
+    train_files = ['./acne_classification/data/NNEW_trainval_0.txt','./acne_classification/data/NNEW_trainval_1.txt',
+            './acne_classification/data/NNEW_trainval_2.txt','./acne_classification/data/NNEW_trainval_3.txt',
+            './acne_classification/data/NNEW_trainval_4.txt']
 
-    test_files = ['data/NNEW_test_0.txt','data/NNEW_test_1.txt',
-            'data/NNEW_test_2.txt','data/NNEW_test_3.txt',
-            'data/NNEW_test_4.txt']
-    path = 'data/JPEGImagesv'
+    test_files = ['./acne_classification/data/NNEW_test_0.txt','./acne_classification/data/NNEW_test_1.txt',
+            './acne_classification/data/NNEW_test_2.txt','./acne_classification/data/NNEW_test_3.txt',
+            './acne_classification/data/NNEW_test_4.txt']
+    path = './acne_classification/data/JPEGImagesv'
 
     #batch size
     bs = 16
@@ -305,15 +305,15 @@ def train_classification():
                                                 torchvision.transforms.ToTensor(),
                                                 torchvision.transforms.Normalize(mean, std)])
 
-    train_dataset = ClassificationDataset(x_train,data_path = "data/JPEGImages",transform=transform,training=True)
-    val_dataset = ClassificationDataset(x_val,data_path = "data/JPEGImages",transform=test_transform,training=True)
+    train_dataset = ClassificationDataset(x_train,data_path = "./acne_classification/data/JPEGImages",transform=transform,training=True)
+    val_dataset = ClassificationDataset(x_val,data_path = "./acne_classification/data/JPEGImages",transform=test_transform,training=True)
     train_loader = torch.utils.data.DataLoader(
             train_dataset, batch_size=bs, shuffle=True,
         )
         # create test_loader
     val_loader = torch.utils.data.DataLoader(val_dataset, batch_size=1, shuffle=False)
 
-    testset = ClassificationDataset(test_df,data_path = "data/JPEGImages",transform=test_transform,training=True)
+    testset = ClassificationDataset(test_df,data_path = "./acne_classification/data/JPEGImages",transform=test_transform,training=True)
     test_loader = torch.utils.data.DataLoader(
             testset, batch_size=1, shuffle=False,
         )
@@ -378,7 +378,7 @@ def train_classification():
             best_val_acc = val_result["accuracy_score"]
             torch.save(
                 model,
-                "./model/" +  "best.pt"
+                "./acne_classification/model/" +  "best.pt"
             )
         else:
             print(

@@ -57,7 +57,7 @@ def predict_detection():
     backbone = keras_cv.models.YOLOV8Backbone.from_preset("yolo_v8_l_backbone", include_rescaling = True)
     # yolov8 모델설정. 생성된 백본과 추가 설정을 사용해 객체 탐지 모델 초기화. 클래스 수는 class_mapping 딕셔너리 길이를 기반. 바운딩 박스 포맷은 xyxy
     YOLOV8_model = keras_cv.models.YOLOV8Detector(num_classes=len(class_mapping), bounding_box_format = "xyxy", backbone = backbone, fpn_depth = 5)
-    YOLOV8_model.load_weights('./acne_detection/model/yolov8_acne_detection_large.h5')
+    YOLOV8_model.load_weights('/home/t24117/last/acne_detection/model/yolov8_acne_detection_large.h5')
     if file:
         img_path = secure_filename(f'{userId}.jpg')
         file.save(img_path)
